@@ -4,14 +4,11 @@ pragma solidity ^0.8.34;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
+import "./interfaces/IVaultManager.sol";
 
-interface ISavingCore {
-    // Marker interface
-}
-
-contract VaultManager is Ownable, Pausable {
+contract VaultManager is IVaultManager, Ownable, Pausable {
     IERC20 public immutable usdc;
-    address public feeReceiver;
+    address public override feeReceiver;
     
     mapping(address => bool) public authorizedCallers;
 
@@ -20,7 +17,6 @@ contract VaultManager is Ownable, Pausable {
     event FeeReceiverSet(address indexed feeReceiver);
     event AuthorizedCallerSet(address indexed caller, bool authorized);
     event InterestPaid(address indexed to, uint256 amount);
-    event PenaltyPaid(address indexed to, uint256 amount);
 
     constructor(address _usdc, address _feeReceiver) Ownable(msg.sender) {
         usdc = IERC20(_usdc);
@@ -56,19 +52,11 @@ contract VaultManager is Ownable, Pausable {
         emit VaultWithdrawn(msg.sender, amount);
     }
 
-    function payInterest(address to, uint256 amount) external onlyAuthorized whenNotPaused {
+    function payInterest(address to, uint256 amount) external override onlyAuthorized whenNotPaused {
         require(amount > 0, "VaultManager: amount must be > 0");
         require(usdc.balanceOf(address(this)) >= amount, "VaultManager: insufficient funds for interest");
         require(usdc.transfer(to, amount), "VaultManager: transfer failed");
         emit InterestPaid(to, amount);
-    }
-
-    function payPenalty(uint256 amount) external onlyAuthorized whenNotPaused {
-        require(amount > 0, "VaultManager: amount must be > 0");
-        require(feeReceiver != address(0), "VaultManager: fee receiver not set");
-        require(usdc.balanceOf(address(this)) >= amount, "VaultManager: insufficient funds");
-        require(usdc.transfer(feeReceiver, amount), "VaultManager: transfer failed");
-        emit PenaltyPaid(feeReceiver, amount);
     }
 
     function pause() external onlyOwner {

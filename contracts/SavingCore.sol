@@ -5,11 +5,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
-
-interface IVaultManager {
-    function payInterest(address to, uint256 amount) external;
-    function payPenalty(uint256 amount) external;
-}
+import "./interfaces/IVaultManager.sol";
+import "./libraries/InterestMath.sol";
 
 contract SavingCore is ERC721, Ownable, Pausable {
     IERC20 public immutable usdc;
@@ -138,10 +135,7 @@ contract SavingCore is ERC721, Ownable, Pausable {
     }
 
     function calculateInterest(uint256 principal, uint256 aprBps, uint256 tenorSeconds) public pure returns (uint256) {
-        // interest = (principal * aprBps * tenorSeconds) / (SECONDS_PER_YEAR * BASIS_POINTS)
-        // Multiply before divide for precision
-        uint256 interest = (principal * aprBps * tenorSeconds) / (SECONDS_PER_YEAR * BASIS_POINTS);
-        return interest;
+        return InterestMath.interest(principal, aprBps, tenorSeconds);
     }
 
     function withdrawAtMaturity(uint256 depositId) external whenNotPaused {
@@ -173,14 +167,14 @@ contract SavingCore is ERC721, Ownable, Pausable {
         require(block.timestamp < deposit.maturityAt, "SavingCore: already matured, use withdrawAtMaturity");
 
         uint256 principal = deposit.principal;
-        uint256 penalty = (principal * deposit.penaltyBpsAtOpen) / BASIS_POINTS;
+        uint256 penalty = InterestMath.penalty(principal, deposit.penaltyBpsAtOpen);
         uint256 userReceives = principal - penalty;
 
         deposit.status = DepositStatus.Withdrawn;
 
-        // Pay penalty to fee receiver via vault
+        // Penalty is cut from the user's principal (held here), not paid from the vault
         if (penalty > 0) {
-            vaultManager.payPenalty(penalty);
+            require(usdc.transfer(vaultManager.feeReceiver(), penalty), "SavingCore: penalty transfer failed");
         }
         // Return remaining principal to user
         require(usdc.transfer(msg.sender, userReceives), "SavingCore: principal transfer failed");
@@ -206,6 +200,11 @@ contract SavingCore is ERC721, Ownable, Pausable {
 
         // Mark old deposit as manually renewed
         deposit.status = DepositStatus.ManualRenewed;
+
+        // Pull the compounded interest from the vault so this contract's balance still backs every principal
+        if (interest > 0) {
+            vaultManager.payInterest(address(this), interest);
+        }
 
         // Create new deposit with new plan's parameters
         uint256 newDepositId = nextDepositId++;
@@ -241,6 +240,11 @@ contract SavingCore is ERC721, Ownable, Pausable {
 
         // Mark old deposit as auto renewed
         deposit.status = DepositStatus.AutoRenewed;
+
+        // Pull the compounded interest from the vault so this contract's balance still backs every principal
+        if (interest > 0) {
+            vaultManager.payInterest(address(this), interest);
+        }
 
         // Create new deposit with SAME tenor as original, ORIGINAL APR locked
         uint256 newDepositId = nextDepositId++;
