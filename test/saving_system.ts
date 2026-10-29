@@ -143,6 +143,8 @@ describe("SavingCore & VaultManager Integration", async function () {
     const expectedUserReceives = principal - expectedPenalty;
 
     const balanceBefore = await mockUSDC.read.balanceOf([user.account.address]);
+    const feeBefore = await mockUSDC.read.balanceOf([feeReceiver.account.address]);
+    const vaultBefore = await vaultManager.read.getBalance();
 
     await savingCore.write.earlyWithdraw([depositId], {
       account: user.account,
@@ -150,6 +152,11 @@ describe("SavingCore & VaultManager Integration", async function () {
 
     const balanceAfter = await mockUSDC.read.balanceOf([user.account.address]);
     assert.strictEqual(balanceAfter - balanceBefore, expectedUserReceives);
+
+    // Penalty comes out of the user's principal, and the vault pays nothing (no interest)
+    const feeAfter = await mockUSDC.read.balanceOf([feeReceiver.account.address]);
+    assert.strictEqual(feeAfter - feeBefore, expectedPenalty);
+    assert.strictEqual(await vaultManager.read.getBalance(), vaultBefore);
 
     const deposit = await savingCore.read.getDeposit([depositId]);
     assert.strictEqual(deposit.status, 1); // Withdrawn
@@ -216,6 +223,8 @@ describe("SavingCore & VaultManager Integration", async function () {
     await savingCore.write.createPlan([renewalTenor, renewalApr, 0n, 0n, 0n]);
 
     const balanceBefore = await mockUSDC.read.balanceOf([user.account.address]);
+    const coreBefore = await mockUSDC.read.balanceOf([savingCore.address]);
+    const vaultBefore = await vaultManager.read.getBalance();
     await savingCore.write.renewDeposit([depId, renewalPlanId], { account: user.account });
     const balanceAfter = await mockUSDC.read.balanceOf([user.account.address]);
 
@@ -228,6 +237,10 @@ describe("SavingCore & VaultManager Integration", async function () {
     const expectedInterest = (amount * aprBps * (tenorDays * 86400n)) / (365n * 86400n * 10000n);
     assert.strictEqual(newDeposit.principal, amount + expectedInterest);
     assert.strictEqual(newDeposit.aprBpsAtOpen, renewalApr);
+
+    // Compounded interest moves from the vault into SavingCore, so the new principal is fully backed
+    assert.strictEqual(await mockUSDC.read.balanceOf([savingCore.address]), coreBefore + expectedInterest);
+    assert.strictEqual(await vaultManager.read.getBalance(), vaultBefore - expectedInterest);
   });
 
   it("should handle auto-renewal after grace period", async function () {
@@ -257,6 +270,7 @@ describe("SavingCore & VaultManager Integration", async function () {
     await networkHelpers.time.increase(Number(4n * 86400n + 1n));
 
     // 3. Auto-renew should now succeed
+    const coreBefore = await mockUSDC.read.balanceOf([savingCore.address]);
     await savingCore.write.autoRenewDeposit([depId], { account: user.account });
 
     const newDepId = (await savingCore.read.nextDepositId()) - 1n;
@@ -267,5 +281,6 @@ describe("SavingCore & VaultManager Integration", async function () {
 
     const expectedInterest = (amount * aprBps * (tenorDays * 86400n)) / (365n * 86400n * 10000n);
     assert.strictEqual(newDeposit.principal, amount + expectedInterest);
+    assert.strictEqual(await mockUSDC.read.balanceOf([savingCore.address]), coreBefore + expectedInterest);
   });
 });

@@ -1,8 +1,9 @@
+import './globals.css';
 import { Providers } from './providers';
 
 export const metadata = {
-  title: 'SavingVault',
-  description: 'High-yield USDC saving certificates',
+  title: 'Apex Vault Bank',
+  description: 'On-chain term deposits with NFT certificates',
 }
 
 export default function RootLayout({
@@ -18,4 +19,3 @@ export default function RootLayout({
     </html>
   )
 }
-
