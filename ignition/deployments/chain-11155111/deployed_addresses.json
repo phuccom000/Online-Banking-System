@@ -1,0 +1,5 @@
+{
+  "OnlineBankingModule#MockUSDC": "0x55603EB67953fa50851159350FA1A9f55A529f5E",
+  "OnlineBankingModule#VaultManager": "0x99cC3D8AE2F5Cf0061F8e7Fe8d9fBf129291cc80",
+  "OnlineBankingModule#SavingCore": "0x35c01ecB096caFa80401Ead21c6F4274d455a9bc"
+}
