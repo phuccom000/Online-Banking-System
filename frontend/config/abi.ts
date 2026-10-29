@@ -1,6 +1,6 @@
 export const CONTRACT_ADDRESSES = {
-  SavingCore: "0x0000000000000000000000000000000000000000", // Replace with deployed address
-  USDC: "0x0000000000000000000000000000000000000000", // Replace with deployed address
+  SavingCore: "0x35c01ecB096caFa80401Ead21c6F4274d455a9bc",
+  USDC: "0x55603EB67953fa50851159350FA1A9f55A529f5E",
 };
 
 export const SAVING_CORE_ABI = [
