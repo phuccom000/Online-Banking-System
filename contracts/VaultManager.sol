@@ -59,6 +59,13 @@ contract VaultManager is IVaultManager, Ownable, Pausable {
         emit InterestPaid(to, amount);
     }
 
+    /// @dev Single-admin design: ownership is set once in the constructor (the deployer, who also owns SavingCore)
+    ///      and can never be transferred or renounced, so the bank always has exactly one admin.
+    function _transferOwnership(address newOwner) internal override {
+        require(owner() == address(0), "VaultManager: single admin, ownership is fixed");
+        super._transferOwnership(newOwner);
+    }
+
     function pause() external onlyOwner {
         _pause();
     }

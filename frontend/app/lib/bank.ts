@@ -37,6 +37,12 @@ export type Deposit = {
   aprBpsAtOpen: bigint;
   penaltyBpsAtOpen: bigint;
   status: DepositStatus;
+  /** Deposit id this certificate was renewed from (0 = opened fresh) */
+  renewedFrom: bigint;
+  /** Deposit id this certificate was renewed into (0 = not renewed) */
+  renewedTo: bigint;
+  /** Holder when the NFT was burned (zero address while active) */
+  closedBy: Address;
 };
 
 export type VaultInfo = {

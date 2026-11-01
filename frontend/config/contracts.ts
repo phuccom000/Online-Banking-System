@@ -12,9 +12,9 @@ export type ContractSet = {
 // (deployer nonce 0, 1, 2). Override with NEXT_PUBLIC_LOCAL_* if yours differ.
 export const CONTRACTS: Record<number, ContractSet> = {
   [sepolia.id]: {
-    usdc: '0x55603EB67953fa50851159350FA1A9f55A529f5E',
-    vaultManager: '0x99cC3D8AE2F5Cf0061F8e7Fe8d9fBf129291cc80',
-    savingCore: '0x35c01ecB096caFa80401Ead21c6F4274d455a9bc',
+    usdc: '0xA0b4A6c713385CB31c96Ea60115dA988153985B2',
+    vaultManager: '0x0bC43428e64c8CA5a7C6082DD89CEAdE0aB9e585',
+    savingCore: '0x98b98B92B95A4EdC6e29268A3460a9989431306e',
   },
   [hardhat.id]: {
     usdc: (process.env.NEXT_PUBLIC_LOCAL_USDC ?? '0x5FbDB2315678afecb367f032d93F642f64180aa3') as Address,

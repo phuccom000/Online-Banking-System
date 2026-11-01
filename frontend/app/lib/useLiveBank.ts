@@ -89,7 +89,8 @@ export function useLiveBank(
     query: { enabled: on && planIds.length > 0 },
   });
 
-  // The certificate NFT is not enumerable, so scan every deposit id (fine for a demo-sized contract)
+  // The certificate NFT is not enumerable, so scan every deposit id (fine for a demo-sized contract).
+  // ownerOf reverts for burned certificates (withdrawn/renewed); those fall back to closedBy below.
   const depositReads = useReadContracts({
     contracts: depositIds.flatMap((id) => [
       { ...core, functionName: 'getDeposit' as const, args: [id] as const },
@@ -109,8 +110,10 @@ export function useLiveBank(
     const r = depositReads.data ?? [];
     return depositIds.flatMap((id, i) => {
       const d = r[i * 2]?.result as Omit<Deposit, 'id' | 'owner'> | undefined;
-      const o = r[i * 2 + 1]?.result as Address | undefined;
-      return d && o ? [{ ...d, id, owner: o, status: Number(d.status) }] : [];
+      if (!d) return [];
+      const holder = r[i * 2 + 1]?.result as Address | undefined;
+      const owner = holder ?? d.closedBy;
+      return [{ ...d, id, owner, status: Number(d.status) }];
     });
   }, [depositReads.data, depositIds]);
 

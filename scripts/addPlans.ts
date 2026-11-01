@@ -27,7 +27,7 @@ async function main() {
 
   console.log("Adding plans with account:", account.address);
 
-  const savingCoreAddress = "0x35c01ecB096caFa80401Ead21c6F4274d455a9bc";
+  const savingCoreAddress = "0x98b98B92B95A4EdC6e29268A3460a9989431306e";
   const abi = [
     {
       "inputs": [
@@ -44,10 +44,12 @@ async function main() {
     }
   ] as const;
 
+  // Default catalog. Plan 1 is the personal-variant default (180 days, 250 bps APR, 450 bps penalty).
+  // min/max are in whole USDC (0 = no limit).
   const plans = [
-    { tenor: 30, apr: 500, min: 10, max: 1000, penalty: 100 },
-    { tenor: 90, apr: 800, min: 100, max: 10000, penalty: 200 },
-    { tenor: 365, apr: 1200, min: 500, max: 100000, penalty: 500 },
+    { tenor: 180, apr: 250, min: 0, max: 0, penalty: 450 },
+    { tenor: 30, apr: 200, min: 10, max: 10000, penalty: 450 },
+    { tenor: 365, apr: 400, min: 500, max: 100000, penalty: 450 },
   ];
 
   for (const p of plans) {

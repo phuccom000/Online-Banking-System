@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { CalendarClock, Hourglass, Layers, RefreshCw, Timer } from 'lucide-react';
+import { CalendarClock, Flame, GitBranch, Hourglass, Layers, RefreshCw, Timer } from 'lucide-react';
 import {
   Bank,
   Deposit,
@@ -72,7 +72,14 @@ function CertificateCard({
             </span>
             <span className="font-mono text-sm font-semibold text-white">SDC #{d.id.toString()}</span>
           </div>
-          <Badge tone={STATUS_TONE[d.status as DepositStatus]}>{STATUS_LABEL[d.status as DepositStatus]}</Badge>
+          <div className="flex items-center gap-1.5">
+            {!active && (
+              <Badge tone="rose">
+                <Flame size={12} /> NFT burned
+              </Badge>
+            )}
+            <Badge tone={STATUS_TONE[d.status as DepositStatus]}>{STATUS_LABEL[d.status as DepositStatus]}</Badge>
+          </div>
         </div>
         <p className="relative mt-3 text-2xl font-semibold tabular-nums text-white">
           {fmtUsdc(d.principal)} <span className="text-sm font-medium text-slate-400">USDC</span>
@@ -97,6 +104,21 @@ function CertificateCard({
         <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-400">
           <CalendarClock size={13} /> Matures {fmtDate(d.maturityAt)}
         </p>
+
+        {(d.renewedFrom > 0n || d.renewedTo > 0n) && (
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            {d.renewedFrom > 0n && (
+              <span className="flex items-center gap-1.5 text-cyan-300">
+                <GitBranch size={13} /> Renewed from SDC #{d.renewedFrom.toString()}
+              </span>
+            )}
+            {d.renewedTo > 0n && (
+              <span className="flex items-center gap-1.5 text-violet-300">
+                <RefreshCw size={13} /> Renewed into SDC #{d.renewedTo.toString()}
+              </span>
+            )}
+          </div>
+        )}
 
         {active && !matured && (
           <div className="mt-4">

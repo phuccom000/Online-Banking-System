@@ -31,12 +31,15 @@ export function Header({
   bank,
   supportedChain,
   view,
+  isAdmin,
   onViewChange,
   notify,
 }: {
   bank: Bank;
   supportedChain: boolean;
   view: View;
+  /** Only the single admin account (owner of SavingCore and VaultManager) sees the Bank Admin tab */
+  isAdmin: boolean;
   onViewChange: (v: View) => void;
   notify: Notify;
 }) {
@@ -66,7 +69,7 @@ export function Header({
 
   const tabs: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
     { id: 'user', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'admin', label: 'Bank Admin', icon: Landmark },
+    ...(isAdmin ? [{ id: 'admin' as const, label: 'Bank Admin', icon: Landmark }] : []),
   ];
 
   return (
@@ -80,8 +83,8 @@ export function Header({
           </div>
         </div>
 
-        {/* View toggle */}
-        <nav className="order-last flex w-full rounded-xl border border-white/[0.08] bg-white/[0.03] p-1 md:order-none md:ml-6 md:w-auto">
+        {/* View toggle: regular users only have the dashboard, so it is hidden for them */}
+        <nav hidden={tabs.length < 2} className="order-last flex w-full rounded-xl border border-white/[0.08] bg-white/[0.03] p-1 md:order-none md:ml-6 md:w-auto">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}

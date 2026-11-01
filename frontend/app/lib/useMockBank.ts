@@ -23,6 +23,7 @@ export const DEMO_ACCOUNT: Address = '0xA9e5c0f1D2b3C4d5E6f7081920a1B2c3D4e5F612
 const FEE_RECEIVER: Address = '0xFee0000000000000000000000000000000000001';
 const GRACE_PERIOD_DAYS = 4n; // matches SavingCore.GRACE_PERIOD_DAYS
 const USDC = 10n ** BigInt(USDC_DECIMALS);
+const ZERO: Address = '0x0000000000000000000000000000000000000000';
 
 type MockState = {
   clockOffset: number;
@@ -62,7 +63,14 @@ function seed(): MockState {
     plan(3, 365, 400, 500, 100_000),
     plan(4, 7, 150, 0, 1_000, false),
   ];
-  const dep = (id: number, p: Plan, principal: number, startDaysAgo: number, status = DepositStatus.Active): Deposit => {
+  const dep = (
+    id: number,
+    p: Plan,
+    principal: number,
+    startDaysAgo: number,
+    status = DepositStatus.Active,
+    links: { renewedFrom?: number; renewedTo?: number } = {}
+  ): Deposit => {
     const startAt = now - BigInt(Math.round(startDaysAgo * 86400));
     return {
       id: BigInt(id),
@@ -75,12 +83,17 @@ function seed(): MockState {
       aprBpsAtOpen: p.aprBps,
       penaltyBpsAtOpen: p.earlyWithdrawPenaltyBps,
       status,
+      renewedFrom: BigInt(links.renewedFrom ?? 0),
+      renewedTo: BigInt(links.renewedTo ?? 0),
+      closedBy: status === DepositStatus.Active ? ZERO : DEMO_ACCOUNT,
     };
   };
+  // Burned certificates stay in the list as history (closedBy = last holder)
   const deposits = [
-    dep(1, plans[0], 1_500, 31.5), // matured 1.5 days ago, inside the grace period
-    dep(2, plans[1], 4_000, 42), // active, ~138 days left
-    dep(3, plans[0], 800, 75, DepositStatus.Withdrawn),
+    dep(1, plans[0], 800, 75, DepositStatus.Withdrawn), // withdrawn, NFT burned
+    dep(2, plans[0], 1_000, 72, DepositStatus.ManualRenewed, { renewedTo: 4 }), // renewed into #4, NFT burned
+    dep(3, plans[1], 4_000, 42), // active, ~138 days left
+    dep(4, plans[0], 1_500, 31.5, DepositStatus.Active, { renewedFrom: 2 }), // matured 1.5 days ago, in grace period
   ];
   const coreBalance = deposits.filter((d) => d.status === DepositStatus.Active).reduce((s, d) => s + d.principal, 0n);
   return {
@@ -137,10 +150,20 @@ export function useMockBank(notify: Notify, now: bigint): Bank {
 
   const actions: BankActions = useMemo(() => {
     const findPlan = (s: MockState, id: bigint) => s.plans.find((p) => p.id === id);
-    const ownDeposit = (s: MockState, id: bigint) => {
+    // Mirrors ownerOf: a closed deposit's NFT is burned, so it no longer exists
+    const liveDeposit = (s: MockState, id: bigint) => {
       const d = s.deposits.find((x) => x.id === id);
-      req(!!d && d.owner === DEMO_ACCOUNT, 'SavingCore: not deposit owner');
+      req(!!d && d.status === DepositStatus.Active, `ERC721NonexistentToken(${id})`);
       return d!;
+    };
+    const ownDeposit = (s: MockState, id: bigint) => {
+      const d = liveDeposit(s, id);
+      req(d.owner === DEMO_ACCOUNT, 'SavingCore: not deposit owner');
+      return d;
+    };
+    const close = (d: Deposit, status: DepositStatus) => {
+      d.status = status;
+      d.closedBy = d.owner;
     };
     const payInterest = (s: MockState, amount: bigint) => {
       if (amount === 0n) return;
@@ -148,9 +171,13 @@ export function useMockBank(notify: Notify, now: bigint): Bank {
       req(s.vaultBalance >= amount, 'VaultManager: insufficient funds for interest');
       s.vaultBalance -= amount;
     };
-    const mintCertificate = (s: MockState, d: Omit<Deposit, 'id'>) => {
+    const mintCertificate = (
+      s: MockState,
+      d: Omit<Deposit, 'id' | 'renewedFrom' | 'renewedTo' | 'closedBy'>,
+      renewedFrom = 0n
+    ) => {
       const id = BigInt(s.deposits.length + 1);
-      s.deposits.push({ ...d, id });
+      s.deposits.push({ ...d, id, renewedFrom, renewedTo: 0n, closedBy: ZERO });
       return id;
     };
 
@@ -208,7 +235,7 @@ export function useMockBank(notify: Notify, now: bigint): Bank {
           req(d.status === DepositStatus.Active, 'SavingCore: deposit not active');
           req(t >= d.maturityAt, 'SavingCore: not matured yet');
           const interest = calcInterest(d.principal, d.aprBpsAtOpen, d.tenorDaysAtOpen);
-          d.status = DepositStatus.Withdrawn;
+          close(d, DepositStatus.Withdrawn);
           s.coreBalance -= d.principal;
           payInterest(s, interest);
           s.usdcBalance += d.principal + interest;
@@ -222,7 +249,7 @@ export function useMockBank(notify: Notify, now: bigint): Bank {
           req(d.status === DepositStatus.Active, 'SavingCore: deposit not active');
           req(t < d.maturityAt, 'SavingCore: already matured, use withdrawAtMaturity');
           const penalty = calcPenalty(d.principal, d.penaltyBpsAtOpen);
-          d.status = DepositStatus.Withdrawn;
+          close(d, DepositStatus.Withdrawn);
           s.coreBalance -= d.principal;
           s.usdcBalance += d.principal - penalty;
           return [{ eventName: 'Withdrawn', args: { depositId: id, principal: d.principal, interest: 0n, isEarly: true } }];
@@ -239,7 +266,7 @@ export function useMockBank(notify: Notify, now: bigint): Bank {
           req(p!.enabled, 'SavingCore: new plan is disabled');
           const interest = calcInterest(d.principal, d.aprBpsAtOpen, d.tenorDaysAtOpen);
           const newPrincipal = d.principal + interest;
-          d.status = DepositStatus.ManualRenewed;
+          close(d, DepositStatus.ManualRenewed);
           payInterest(s, interest);
           s.coreBalance += interest;
           const newDepositId = mintCertificate(s, {
@@ -252,20 +279,19 @@ export function useMockBank(notify: Notify, now: bigint): Bank {
             aprBpsAtOpen: p!.aprBps,
             penaltyBpsAtOpen: p!.earlyWithdrawPenaltyBps,
             status: DepositStatus.Active,
-          });
+          }, id);
+          d.renewedTo = newDepositId;
           return [{ eventName: 'Renewed', args: { oldDepositId: id, newDepositId, newPrincipal, newPlanId } }];
         }),
 
       autoRenewDeposit: (id) =>
         sim('Auto-renew', (s, t) => {
           req(!s.corePaused, 'Pausable: paused');
-          const d = s.deposits.find((x) => x.id === id);
-          req(!!d, 'SavingCore: not authorized');
-          req(d!.status === DepositStatus.Active, 'SavingCore: deposit not active');
+          const d = liveDeposit(s, id);
           req(t >= d!.maturityAt + GRACE_PERIOD_DAYS * SECONDS_PER_DAY, 'SavingCore: grace period not ended');
           const interest = calcInterest(d!.principal, d!.aprBpsAtOpen, d!.tenorDaysAtOpen);
           const newPrincipal = d!.principal + interest;
-          d!.status = DepositStatus.AutoRenewed;
+          close(d!, DepositStatus.AutoRenewed);
           payInterest(s, interest);
           s.coreBalance += interest;
           const newDepositId = mintCertificate(s, {
@@ -278,7 +304,8 @@ export function useMockBank(notify: Notify, now: bigint): Bank {
             aprBpsAtOpen: d!.aprBpsAtOpen, // original APR locked
             penaltyBpsAtOpen: d!.penaltyBpsAtOpen,
             status: DepositStatus.Active,
-          });
+          }, id);
+          d!.renewedTo = newDepositId;
           return [{ eventName: 'Renewed', args: { oldDepositId: id, newDepositId, newPrincipal, newPlanId: d!.planId } }];
         }),
 

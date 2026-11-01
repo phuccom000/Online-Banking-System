@@ -640,6 +640,21 @@ export const SAVING_CORE_ABI = [
         "internalType": "enum SavingCore.DepositStatus",
         "name": "status",
         "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "renewedFrom",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "renewedTo",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "closedBy",
+        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -754,6 +769,21 @@ export const SAVING_CORE_ABI = [
             "internalType": "enum SavingCore.DepositStatus",
             "name": "status",
             "type": "uint8"
+          },
+          {
+            "internalType": "uint256",
+            "name": "renewedFrom",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "renewedTo",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "closedBy",
+            "type": "address"
           }
         ],
         "internalType": "struct SavingCore.Deposit",

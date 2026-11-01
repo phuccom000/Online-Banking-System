@@ -1,5 +1,5 @@
 {
-  "OnlineBankingModule#MockUSDC": "0x55603EB67953fa50851159350FA1A9f55A529f5E",
-  "OnlineBankingModule#VaultManager": "0x99cC3D8AE2F5Cf0061F8e7Fe8d9fBf129291cc80",
-  "OnlineBankingModule#SavingCore": "0x35c01ecB096caFa80401Ead21c6F4274d455a9bc"
+  "OnlineBankingModule#MockUSDC": "0xA0b4A6c713385CB31c96Ea60115dA988153985B2",
+  "OnlineBankingModule#VaultManager": "0x0bC43428e64c8CA5a7C6082DD89CEAdE0aB9e585",
+  "OnlineBankingModule#SavingCore": "0x98b98B92B95A4EdC6e29268A3460a9989431306e"
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDownToLine, Coins, Layers, Percent } from 'lucide-react';
 import { AdminPanel } from './components/AdminPanel';
+import { ContractAddresses } from './components/ContractAddresses';
 import { DemoBanner } from './components/DemoBanner';
 import { EarlyWithdrawModal, RenewModal } from './components/DepositModals';
 import { Header, View } from './components/Header';
@@ -52,6 +53,10 @@ export default function Home() {
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
 
+  // One admin account runs the bank: it owns both SavingCore and VaultManager
+  const isAdmin = !!bank.account && !!bank.vault && bank.vault.owner.toLowerCase() === bank.account.toLowerCase();
+  const activeView: View = isAdmin ? view : 'user';
+
   const mine = bank.deposits.filter(
     (d) => bank.account && d.owner.toLowerCase() === bank.account.toLowerCase() && d.status === DepositStatus.Active
   );
@@ -61,12 +66,12 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      <Header bank={bank} supportedChain={bank.supportedChain} view={view} onViewChange={setView} notify={notify} />
+      <Header bank={bank} supportedChain={bank.supportedChain} view={activeView} isAdmin={isAdmin} onViewChange={setView} notify={notify} />
 
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
         <DemoBanner bank={bank} supportedChain={bank.supportedChain} />
 
-        {view === 'user' ? (
+        {activeView === 'user' ? (
           <>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <SummaryTile icon={Coins} label="Wallet balance" value={fmtUsdc(bank.usdcBalance)} />
@@ -81,6 +86,8 @@ export default function Home() {
         ) : (
           <AdminPanel bank={bank} />
         )}
+
+        <ContractAddresses bank={bank} />
 
         <footer className="pb-4 pt-2 text-center text-xs text-slate-600">
           SavingCore · VaultManager · MockUSDC (6 decimals) · Built on OpenZeppelin ERC721, Ownable &amp; Pausable

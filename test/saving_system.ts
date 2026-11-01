@@ -110,7 +110,7 @@ describe("SavingCore & VaultManager Integration", async function () {
     const planId = 1n;
     await savingCore.write.disablePlan([planId]);
 
-    await viem.assertions.revert(
+    await viem.assertions.revertWith(
       savingCore.write.openDeposit([planId, userDepositAmount], { account: user.account }),
       "SavingCore: plan is disabled"
     );
@@ -123,13 +123,13 @@ describe("SavingCore & VaultManager Integration", async function () {
     const plan = await savingCore.read.getPlan([planId]);
 
     const tooLow = plan.minDeposit - 1n;
-    await viem.assertions.revert(
+    await viem.assertions.revertWith(
       savingCore.write.openDeposit([planId, tooLow], { account: user.account }),
       "SavingCore: amount below minimum"
     );
 
     const tooHigh = plan.maxDeposit + 1n;
-    await viem.assertions.revert(
+    await viem.assertions.revertWith(
       savingCore.write.openDeposit([planId, tooHigh], { account: user.account }),
       "SavingCore: amount above maximum"
     );
@@ -194,7 +194,7 @@ describe("SavingCore & VaultManager Integration", async function () {
   });
 
   it("should prevent unauthorized users from paying interest via VaultManager", async function () {
-    await viem.assertions.revert(
+    await viem.assertions.revertWith(
       vaultManager.write.payInterest([user.account.address, 100n], { account: user.account }),
       "VaultManager: not authorized"
     );
@@ -261,7 +261,7 @@ describe("SavingCore & VaultManager Integration", async function () {
     await networkHelpers.time.increase(Number(tenorDays * 86400n));
 
     // 1. Try to auto-renew BEFORE grace period (4 days)
-    await viem.assertions.revert(
+    await viem.assertions.revertWith(
       savingCore.write.autoRenewDeposit([depId], { account: user.account }),
       "SavingCore: grace period not ended"
     );

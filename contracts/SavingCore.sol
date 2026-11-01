@@ -46,6 +46,9 @@ contract SavingCore is ERC721, Ownable, Pausable {
         uint256 aprBpsAtOpen;
         uint256 penaltyBpsAtOpen;
         DepositStatus status;
+        uint256 renewedFrom; // deposit id this one was renewed from (0 = opened fresh)
+        uint256 renewedTo; // deposit id this one was renewed into (0 = not renewed)
+        address closedBy; // certificate holder when the NFT was burned (ownerOf reverts after burn)
     }
 
     mapping(uint256 => Plan) public plans;
@@ -58,6 +61,8 @@ contract SavingCore is ERC721, Ownable, Pausable {
     event Renewed(uint256 indexed oldDepositId, uint256 indexed newDepositId, uint256 newPrincipal, uint256 newPlanId);
 
     constructor(address _usdc, address _vaultManager) ERC721("Saving Deposit Certificate", "SDC") Ownable(msg.sender) {
+        // One admin account runs the whole bank: the deployer must already own the VaultManager
+        require(Ownable(_vaultManager).owner() == msg.sender, "SavingCore: admin must own VaultManager");
         usdc = IERC20(_usdc);
         vaultManager = IVaultManager(_vaultManager);
         nextPlanId = 1;
@@ -127,7 +132,10 @@ contract SavingCore is ERC721, Ownable, Pausable {
             tenorDaysAtOpen: plan.tenorDays,
             aprBpsAtOpen: plan.aprBps,
             penaltyBpsAtOpen: plan.earlyWithdrawPenaltyBps,
-            status: DepositStatus.Active
+            status: DepositStatus.Active,
+            renewedFrom: 0,
+            renewedTo: 0,
+            closedBy: address(0)
         });
 
         _safeMint(msg.sender, depositId);
@@ -148,7 +156,8 @@ contract SavingCore is ERC721, Ownable, Pausable {
         uint256 tenorSeconds = deposit.tenorDaysAtOpen * SECONDS_PER_DAY;
         uint256 interest = calculateInterest(principal, deposit.aprBpsAtOpen, tenorSeconds);
 
-        deposit.status = DepositStatus.Withdrawn;
+        // Close the deposit and burn its certificate before moving any tokens
+        _close(depositId, DepositStatus.Withdrawn);
 
         // Return principal from this contract
         require(usdc.transfer(msg.sender, principal), "SavingCore: principal transfer failed");
@@ -170,7 +179,8 @@ contract SavingCore is ERC721, Ownable, Pausable {
         uint256 penalty = InterestMath.penalty(principal, deposit.penaltyBpsAtOpen);
         uint256 userReceives = principal - penalty;
 
-        deposit.status = DepositStatus.Withdrawn;
+        // Close the deposit and burn its certificate before moving any tokens
+        _close(depositId, DepositStatus.Withdrawn);
 
         // Penalty is cut from the user's principal (held here), not paid from the vault
         if (penalty > 0) {
@@ -198,8 +208,8 @@ contract SavingCore is ERC721, Ownable, Pausable {
         uint256 interest = calculateInterest(principal, deposit.aprBpsAtOpen, tenorSeconds);
         uint256 newPrincipal = principal + interest;
 
-        // Mark old deposit as manually renewed
-        deposit.status = DepositStatus.ManualRenewed;
+        // Close the old deposit and burn its certificate; the new one gets a fresh NFT
+        _close(depositId, DepositStatus.ManualRenewed);
 
         // Pull the compounded interest from the vault so this contract's balance still backs every principal
         if (interest > 0) {
@@ -218,8 +228,12 @@ contract SavingCore is ERC721, Ownable, Pausable {
             tenorDaysAtOpen: newPlan.tenorDays,
             aprBpsAtOpen: newPlan.aprBps,
             penaltyBpsAtOpen: newPlan.earlyWithdrawPenaltyBps,
-            status: DepositStatus.Active
+            status: DepositStatus.Active,
+            renewedFrom: depositId,
+            renewedTo: 0,
+            closedBy: address(0)
         });
+        deposit.renewedTo = newDepositId;
 
         _safeMint(msg.sender, newDepositId);
         emit Renewed(depositId, newDepositId, newPrincipal, newPlanId);
@@ -238,8 +252,9 @@ contract SavingCore is ERC721, Ownable, Pausable {
         uint256 interest = calculateInterest(principal, deposit.aprBpsAtOpen, tenorSeconds);
         uint256 newPrincipal = principal + interest;
 
-        // Mark old deposit as auto renewed
-        deposit.status = DepositStatus.AutoRenewed;
+        // The caller may be the admin (bot), so remember the certificate holder before burning
+        address holder = ownerOf(depositId);
+        _close(depositId, DepositStatus.AutoRenewed);
 
         // Pull the compounded interest from the vault so this contract's balance still backs every principal
         if (interest > 0) {
@@ -258,11 +273,31 @@ contract SavingCore is ERC721, Ownable, Pausable {
             tenorDaysAtOpen: deposit.tenorDaysAtOpen,
             aprBpsAtOpen: deposit.aprBpsAtOpen, // Original APR locked
             penaltyBpsAtOpen: deposit.penaltyBpsAtOpen,
-            status: DepositStatus.Active
+            status: DepositStatus.Active,
+            renewedFrom: depositId,
+            renewedTo: 0,
+            closedBy: address(0)
         });
+        deposit.renewedTo = newDepositId;
 
-        _safeMint(ownerOf(depositId), newDepositId);
+        _safeMint(holder, newDepositId);
         emit Renewed(depositId, newDepositId, newPrincipal, deposit.planId);
+    }
+
+    /// @dev Marks a deposit closed and burns its certificate, so a used NFT can never be withdrawn,
+    ///      renewed or traded again. The holder is kept in `closedBy` for history.
+    function _close(uint256 depositId, DepositStatus status) private {
+        Deposit storage deposit = deposits[depositId];
+        deposit.status = status;
+        deposit.closedBy = ownerOf(depositId);
+        _burn(depositId);
+    }
+
+    /// @dev Single-admin design: ownership is set once in the constructor (the deployer, who also owns VaultManager)
+    ///      and can never be transferred or renounced, so the bank always has exactly one admin.
+    function _transferOwnership(address newOwner) internal override {
+        require(owner() == address(0), "SavingCore: single admin, ownership is fixed");
+        super._transferOwnership(newOwner);
     }
 
     function pause() external onlyOwner {
